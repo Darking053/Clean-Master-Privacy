@@ -1,62 +1,30 @@
-name: Auto-Tag & Release Clean Master Privacy
+name: CI & CD Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v3
 
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libglib2.0-dev \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            build-essential
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config build-essential libglib2.0-dev
 
-      - name: Set PKG_CONFIG_PATH
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
         run: |
-          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+          cargo build --release --verbose
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Build Optimized Binary
-        run: cargo build --release
-
-      - name: Build .deb Package
-        run: cargo deb --no-build --profile release
-
-      - name: Bump version and push tag
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.1
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.tag_version.outputs.new_tag }}
-          name: Release ${{ steps.tag_version.outputs.new_tag }}
-          body: ${{ steps.tag_version.outputs.changelog }}
-          files: |
-            target/release/clean-master-privacy
-            target/debian/*.deb
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: CMP-Linux-Binary
+          path: target/release/clean-master-privacy

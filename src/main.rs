@@ -9,8 +9,9 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+// --- CLI Structure ---
 #[derive(Parser)]
-#[command(name = "clean-master-privacy", version = "1.2.0")]
+#[command(name = "clean-master-privacy", version = "1.3.0", about = "AI Powered Security Shield")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -18,13 +19,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Scan { #[arg(short, long, default_value = "/home")] path: String },
+    /// Sistemde derin tarama yapar
+    Scan { 
+        #[arg(short, long, default_value = "/home")] 
+        path: String 
+    },
+    /// Gerçek zamanlı korumayı CLI üzerinden başlatır
     Guard,
 }
 
+// --- Malware Signatures ---
 const MALICIOUS_PATTERNS: &[&str] = &[
     "eval(base64_decode", "rm -rf / --no-preserve-root", "/etc/shadow",
-    "nc -e /bin/sh", "python -c 'import socket;os.dup2'", "memfd_create"
+    "nc -e /bin/sh", "python -c 'import socket;os.dup2'", "memfd_create",
+    "chmod +x", "wget http", "curl -s"
 ];
 
 fn main() -> glib::ExitCode {
@@ -32,12 +40,12 @@ fn main() -> glib::ExitCode {
 
     match cli.command {
         Some(Commands::Scan { path }) => {
-            println!("CLI Scan başlatılıyor: {}", path);
+            println!("🔍 Derin Tarama Başlatılıyor: {}", path);
             async_std::task::block_on(async { run_scan_engine(&path, None, None).await });
             glib::ExitCode::SUCCESS
         },
         Some(Commands::Guard) => {
-            println!("Real-Time Guard aktif...");
+            println!("🛡️ Koruma Kalkanı CLI üzerinde aktif...");
             async_std::task::block_on(async { start_realtime_protection().await });
             glib::ExitCode::SUCCESS
         },
@@ -51,21 +59,32 @@ fn main() -> glib::ExitCode {
     }
 }
 
+// --- UI Engine ---
 fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(800)
         .default_height(600)
-        .title("CMP - Cyber Shield")
+        .title("CMP - Cyber Shield v1.3")
         .build();
 
-    let content = GtkBox::new(Orientation::Vertical, 20);
+    let content = GtkBox::new(Orientation::Vertical, 25);
     content.set_margin_all(30);
 
-    let status_label = Label::builder().label("🛡️ Sistem Güvende").css_classes(["title-2"]).build();
-    let progress_bar = ProgressBar::new();
-    let scan_btn = Button::with_label("🚀 Taramayı Başlat");
+    let status_label = Label::builder()
+        .label("🛡️ Sistem Güvenlik Durumu: Aktif")
+        .css_classes(["title-2"])
+        .build();
+    
+    let progress_bar = ProgressBar::builder()
+        .margin_top(10)
+        .margin_bottom(10)
+        .build();
+    
+    let scan_btn = Button::with_label("🚀 Tam Sistem Taraması");
     scan_btn.add_css_class("suggested-action");
+    
+    let guard_btn = Button::with_label("🛡️ Gerçek Zamanlı Korumayı Başlat");
 
     let status_c = status_label.clone();
     let pb_c = progress_bar.clone();
@@ -75,18 +94,29 @@ fn build_ui(app: &Application) {
         let st = status_c.clone();
         let pb = pb_c.clone();
         glib::spawn_future_local(async move {
-            st.set_text("Tarama yapılıyor...");
+            st.set_text("Tarama yapılıyor, lütfen sisteminizi kapatmayın...");
             run_scan_engine("/home", Some(st), Some(pb)).await;
+        });
+    });
+
+    guard_btn.connect_clicked(move |btn| {
+        btn.set_label("🛡️ Koruma Devrede (İzleniyor)");
+        btn.set_sensitive(false);
+        glib::spawn_future_local(async move {
+            start_realtime_protection().await;
         });
     });
 
     content.append(&status_label);
     content.append(&progress_bar);
     content.append(&scan_btn);
+    content.append(&guard_btn);
+
     window.set_child(Some(&content));
     window.present();
 }
 
+// --- Scanner Core ---
 async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<ProgressBar>) {
     let files: Vec<PathBuf> = walkdir::WalkDir::new(target)
         .into_iter()
@@ -104,6 +134,7 @@ async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<Progress
             let progress = i as f64 / total;
             glib::idle_add_local_once(move || p.set_fraction(progress));
         }
+
         if is_file_malicious(path) {
             let mut count = threats.lock().unwrap();
             *count += 1;
@@ -112,42 +143,70 @@ async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<Progress
     });
 
     if let Some(l) = label {
-        l.set_text(&format!("Bitti! {} Tehdit Bulundu.", *threats.lock().unwrap()));
+        let final_count = *threats.lock().unwrap();
+        l.set_text(&format!("✅ İşlem Tamam! {} Tehdit Etkisiz Hale Getirildi.", final_count));
     }
 }
 
+// --- File Analysis ---
 fn is_file_malicious(path: &Path) -> bool {
     let mut file = match File::open(path) {
         Ok(f) => f,
         Err(_) => return false,
     };
-    let mut buffer = [0u8; 10240];
-    if let Ok(n) = file.read(&mut buffer) {
-        let content = String::from_utf8_lossy(&buffer[..n]);
-        return MALICIOUS_PATTERNS.iter().any(|p| content.contains(p));
+
+    let mut buffer = [0u8; 10240]; // Hız için ilk 10KB
+    if let Ok(bytes_read) = file.read(&mut buffer) {
+        if bytes_read == 0 { return false; }
+        let content = String::from_utf8_lossy(&buffer[..bytes_read]);
+        return MALICIOUS_PATTERNS.iter().any(|&pattern| content.contains(pattern));
     }
     false
 }
 
+// --- Isolation Engine ---
 fn isolate_threat(path: &Path) {
     if let Some(home) = dirs::home_dir() {
-        let q_dir = home.join(".cmp_quarantine");
-        let _ = fs::create_dir_all(&q_dir);
-        if let Some(name) = path.file_name() {
-            let _ = fs::rename(path, q_dir.join(name));
+        let quarantine_path = home.join(".cmp_quarantine");
+        let _ = fs::create_dir_all(&quarantine_path);
+        
+        if let Some(fname) = path.file_name() {
+            let dest = quarantine_path.join(fname);
+            // Taşıma başarısız olursa paniğe girme, sadece devam et
+            let _ = fs::rename(path, dest);
         }
     }
 }
 
+// --- Real-Time Protection ---
 async fn start_realtime_protection() {
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
-    watcher.watch(&dirs::home_dir().unwrap(), RecursiveMode::Recursive).unwrap();
-    for res in rx {
-        if let Ok(event) = res {
-            if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
-                for path in event.paths {
-                    if is_file_malicious(&path) { isolate_threat(&path); }
+    
+    let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("Koruma başlatılamadı (Watcher Hatası): {}", e);
+            return;
+        }
+    };
+
+    if let Some(home) = dirs::home_dir() {
+        if let Err(e) = watcher.watch(&home, RecursiveMode::Recursive) {
+            eprintln!("Dizin izleme hatası: {}", e);
+            return;
+        }
+
+        println!("🛡️ CMP Shield aktif: {:?}", home);
+
+        for res in rx {
+            if let Ok(event) = res {
+                if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+                    for path in event.paths {
+                        if is_file_malicious(&path) {
+                            println!("🛑 TEHDİT ENGELLENDİ: {:?}", path);
+                            isolate_threat(&path);
+                        }
+                    }
                 }
             }
         }

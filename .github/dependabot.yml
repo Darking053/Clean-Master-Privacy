@@ -1,6 +1,17 @@
 version: 2
 updates:
-  - package-ecosystem: "" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # Rust (Cargo) kütüphanelerini her gün kontrol et
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily" # Güvenlik kritik bir yazılım olduğu için haftalık yerine günlük
+    open-pull-requests-limit: 10
+    labels:
+      - "security"
+      - "dependencies"
+
+  # GitHub Actions workflow dosyalarını (release.yml gibi) haftalık kontrol et
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"

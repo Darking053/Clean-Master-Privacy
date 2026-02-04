@@ -3,8 +3,6 @@ name: CI & CD Release
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   build:
@@ -17,35 +15,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
+            build-essential \
             libgtk-4-dev \
             libadwaita-1-dev \
             libglib2.0-dev \
-            build-essential
+            libgio2.0-cil-dev \
+            libgirepository1.0-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build Binary
+      - name: Build Optimized Binary
         run: |
-          # PKG_CONFIG yollarını kesinleştiriyoruz
+          # PKG_CONFIG yollarını Runner'a zorla öğretiyoruz
           export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           cargo build --release --verbose
 
-      - name: Upload Artifact
+      - name: Upload Binary
         uses: actions/upload-artifact@v4
         with:
-          name: CMP-Linux-Binary
+          name: Clean-Master-Privacy-Binary
           path: target/release/clean-master-privacy
-
-  # Otomatik Birleştirme ve Dal Budama (Auto-Merge & Cleanup)
-  automerge-and-cleanup:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && (github.actor == 'gamestime102' || github.actor == 'dependabot[bot]')
-    steps:
-      - name: Merge PR and Delete Branch
-        uses: "pascalgn/automerge-action@v0.16.2"
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          MERGE_METHOD: "squash"
-          MERGE_DELETE_BRANCH: "true" 

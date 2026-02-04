@@ -1,38 +1,76 @@
-name: CI & CD Release
+name: CI & CD Release Pro
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
     branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            pkg-config \
-            build-essential \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libglib2.0-dev \
-            libgio2.0-cil-dev \
-            libgirepository1.0-dev
+            pkg-config build-essential libgtk-4-dev \
+            libadwaita-1-dev libglib2.0-dev \
+            libgirepository1.0-dev libxml2-dev
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Optimized Binary
+        id: cargo_build
         run: |
-          # PKG_CONFIG yollarını Runner'a zorla öğretiyoruz
           export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           cargo build --release --verbose
+        # Hata olsa bile durma, bir sonraki adımda hatayı raporla
+        continue-on-error: true 
+
+      - name: Handle Failure (Auto-Issue & Report)
+        if: steps.cargo_build.outcome == 'failure'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = `❌ **Build Hatası Raporu**
+            CMP derleme sırasında bir hata ile karşılaştı. 
+            **Dosya:** \`release.yml\`
+            **Tetikleyen:** @${context.actor}
+            Lütfen kütüphane bağımlılıklarını ve \`Cargo.toml\` dosyasını kontrol et.`;
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "🚨 Otomatik Hata Raporu: Derleme Başarısız",
+              body: body,
+              assignees: [context.actor]
+            })
+            process.exit(1) # İşlemi burada başarısız olarak işaretle
 
       - name: Upload Binary
+        if: steps.cargo_build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: Clean-Master-Privacy-Binary
+          name: Clean-Master-Privacy-Linux
           path: target/release/clean-master-privacy
+
+  # Otomatik PR ve Branch Temizliği
+  automerge:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Merge PR
+        uses: "pascalgn/automerge-action@v0.16.2"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_METHOD: "squash"
+          MERGE_DELETE_BRANCH: "true"

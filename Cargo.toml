@@ -1,23 +1,29 @@
 [package]
 name = "clean-master-privacy"
-version = "1.1.0" # Version bumped for GUI addition
+version = "1.2.0" 
 authors = ["CMP Dev Team"]
 edition = "2021"
-description = "Enterprise-grade Linux security and privacy suite with GUI"
+description = "Enterprise-grade Linux security and privacy suite with Real-Time Guard"
 license = "GPL-3.0"
 
 [dependencies]
+# CLI & Terminal
 clap = { version = "4.0", features = ["derive"] }
 colored = "2.0"
-rayon = "1.7"
-sha2 = "0.10"
-walkdir = "2"
-sysinfo = "0.29"
-dirs = "5.0"
-chrono = "0.4"
 
-# GUI Dependencies
-gtk4 = "0.7" # GTK4 for modern GUI
-libadwaita = "0.5" # Adwaita for GNOME-like look and feel
-async-std = "1.12" # For async operations in GUI
-futures = "0.3" # For handling futures with async-std
+# Core Logic & Security
+rayon = "1.7"      
+sha2 = "0.10"      
+walkdir = "2"     
+sysinfo = "0.29"   
+dirs = "5.0"       
+chrono = "0.4"    
+
+# GUI Stack
+gtk4 = "0.7" 
+libadwaita = "0.5" 
+
+# Async & Event Handling
+async-std = "1.12" 
+futures = "0.3"
+notify = "6.1"      

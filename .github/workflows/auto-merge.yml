@@ -1,10 +1,9 @@
-name: Auto-Merge and Cleanup
+name: Auto-Merge & Branch Cleanup
 
 on:
   pull_request:
     types: [labeled, opened, synchronize, reopened]
-  workflow_run:
-    workflows: ["Auto-Tag & Release Clean Master Privacy"]
+  check_run:
     types: [completed]
 
 jobs:
@@ -12,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'gamestime102' || github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
-      - name: Merge PR
-        uses: pascalgn/automerge-action@v0.16.2
+      - name: Auto-merge PR
+        uses: "pascalgn/automerge-action@v0.16.2"
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          MERGE_METHOD: "squash"
+          MERGE_METHOD: "squash" 
           MERGE_DELETE_BRANCH: "true" 

@@ -1,9 +1,9 @@
 [package]
 name = "clean-master-privacy"
-version = "1.0.2"
+version = "1.1.0" # Version bumped for GUI addition
 authors = ["CMP Dev Team"]
 edition = "2021"
-description = "Enterprise-grade Linux security and privacy suite"
+description = "Enterprise-grade Linux security and privacy suite with GUI"
 license = "GPL-3.0"
 
 [dependencies]
@@ -16,16 +16,8 @@ sysinfo = "0.29"
 dirs = "5.0"
 chrono = "0.4"
 
-[package.metadata.deb]
-maintainer = "CMP Security <support@cmp-privacy.com>"
-copyright = "2026, Clean Master Privacy"
-priority = "optional"
-section = "utils"
-extended-description = """
-A high-performance security suite written in Rust. 
-Includes heuristic scanning, real-time memory monitoring, 
-and privacy-focused system cleaning.
-"""
-assets = [
-    ["target/release/clean-master-privacy", "/usr/bin/clean-master-privacy", "755"],
-]
+# GUI Dependencies
+gtk4 = "0.7" # GTK4 for modern GUI
+libadwaita = "0.5" # Adwaita for GNOME-like look and feel
+async-std = "1.12" # For async operations in GUI
+futures = "0.3" # For handling futures with async-std

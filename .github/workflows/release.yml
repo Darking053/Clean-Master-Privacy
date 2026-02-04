@@ -3,6 +3,8 @@ name: CI & CD Release
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
@@ -13,18 +15,37 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config build-essential libglib2.0-dev
+          sudo apt-get install -y \
+            pkg-config \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libglib2.0-dev \
+            build-essential
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
+      - name: Build Binary
         run: |
-          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+          # PKG_CONFIG yollarını kesinleştiriyoruz
+          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
           cargo build --release --verbose
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: CMP-Linux-Binary
           path: target/release/clean-master-privacy
+
+  # Otomatik Birleştirme ve Dal Budama (Auto-Merge & Cleanup)
+  automerge-and-cleanup:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && (github.actor == 'gamestime102' || github.actor == 'dependabot[bot]')
+    steps:
+      - name: Merge PR and Delete Branch
+        uses: "pascalgn/automerge-action@v0.16.2"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_METHOD: "squash"
+          MERGE_DELETE_BRANCH: "true" 

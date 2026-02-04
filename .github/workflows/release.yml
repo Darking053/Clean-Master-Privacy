@@ -3,22 +3,28 @@ name: Auto-Tag & Release Clean Master Privacy
 on:
   push:
     branches:
-      - main  # Sadece main branch'e kod pushlandığında çalışır
+      - main
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # GitHub'ın tag ve release oluşturabilmesi için şart
+      contents: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Tüm geçmişi çek ki versiyonu hesaplayabilsin
+          fetch-depth: 0
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      # GTK4 development libraries for building
+      - name: Install GTK4 Dev Libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
@@ -27,16 +33,14 @@ jobs:
         run: cargo build --release
 
       - name: Build .deb Package
-        run: cargo deb
+        run: cargo deb --profile release
 
-      # OTOMATİK TAG OLUŞTURMA: Kodda değişiklik varsa v1.0.x şeklinde artırır
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      # OTOMATİK RELEASE OLUŞTURMA
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:

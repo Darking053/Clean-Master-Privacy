@@ -1,21 +1,25 @@
-name: Build & Release Clean Master Privacy
+name: Auto-Tag & Release Clean Master Privacy
 
 on:
   push:
-    tags:
-      - 'v*' 
+    branches:
+      - main  # Sadece main branch'e kod pushlandığında çalışır
+
 jobs:
-  release:
-    name: Build and Create Release
+  build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub'ın tag ve release oluşturabilmesi için şart
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-      
+        with:
+          fetch-depth: 0 # Tüm geçmişi çek ki versiyonu hesaplayabilsin
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-     
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
@@ -25,10 +29,20 @@ jobs:
       - name: Build .deb Package
         run: cargo deb
 
-     
+      # OTOMATİK TAG OLUŞTURMA: Kodda değişiklik varsa v1.0.x şeklinde artırır
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # OTOMATİK RELEASE OLUŞTURMA
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
           files: |
             target/release/clean-master-privacy
             target/debian/*.deb

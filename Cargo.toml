@@ -1,9 +1,8 @@
 [package]
 name = "clean-master-privacy"
-version = "0.1.1"
+version = "1.0.0"
+authors = ["CMP Dev Team"]
 edition = "2021"
-authors = ["YourName"]
-description = "High-performance Linux security tool"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
@@ -11,19 +10,18 @@ colored = "2.0"
 rayon = "1.7"
 sha2 = "0.10"
 walkdir = "2"
-dirs = "5.0"
+sysinfo = "0.29"
 chrono = "0.4"
+dirs = "5.0"
 
 [package.metadata.deb]
-maintainer = "YourName <youremail@example.com>"
-copyright = "2026, YourName"
-license-file = ["LICENSE", "4"]
-extended-description = """
-Clean Master Privacy is a lightweight, high-performance antivirus 
-and privacy cleaning tool written in Rust for Linux systems.
-"""
-section = "utils"
+maintainer = "CMP Security <support@cmp-privacy.com>"
+copyright = "2026, Clean Master Privacy"
+license = "GPL-3.0"
 priority = "optional"
+section = "utils"
+# This ensures it integrates with the system tray or dash
 assets = [
     ["target/release/clean-master-privacy", "/usr/bin/clean-master-privacy", "755"],
+    ["assets/cmp-icon.png", "/usr/share/icons/hicolor/scalable/apps/cmp.png", "644"],
 ]

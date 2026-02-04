@@ -20,28 +20,28 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # TÜM SİSTEM BAĞIMLILIKLARI (GTK4, GLIB, PKG-CONFIG)
       - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            build-essential \
             pkg-config \
             libglib2.0-dev \
-            libgstrtspserver-1.0-dev \
-            libgraphene-1.0-dev
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            build-essential
+
+      - name: Set PKG_CONFIG_PATH
+        run: |
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
       - name: Build Optimized Binary
-        # PKG_CONFIG_PATH'i sağlama alıyoruz
         run: cargo build --release
 
       - name: Build .deb Package
-        run: cargo deb --profile release
+        run: cargo deb --no-build --profile release
 
       - name: Bump version and push tag
         id: tag_version

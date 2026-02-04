@@ -1,8 +1,10 @@
 [package]
 name = "clean-master-privacy"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["CMP Dev Team"]
 edition = "2021"
+description = "High-performance Linux security and privacy tool"
+license = "GPL-3.0"
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
@@ -17,11 +19,12 @@ dirs = "5.0"
 [package.metadata.deb]
 maintainer = "CMP Security <support@cmp-privacy.com>"
 copyright = "2026, Clean Master Privacy"
-license = "GPL-3.0"
 priority = "optional"
 section = "utils"
-# This ensures it integrates with the system tray or dash
+extended-description = """
+Clean Master Privacy is an enterprise-grade security suite 
+providing heuristic scanning, memory protection, and privacy cleaning.
+"""
 assets = [
     ["target/release/clean-master-privacy", "/usr/bin/clean-master-privacy", "755"],
-    ["assets/cmp-icon.png", "/usr/share/icons/hicolor/scalable/apps/cmp.png", "644"],
 ]

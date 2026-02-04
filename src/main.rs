@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use colored::*;
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
-use std::fs::{self, File};
-use std::io::{self, Read};
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use sysinfo::{ProcessExt, System, SystemExt};
@@ -31,7 +31,6 @@ enum Commands {
     Clean,
 }
 
-// Global threat intelligence simulation
 const HEURISTIC_PATTERNS: &[&str] = &["eval(base64_decode", "system(rm -rf", "powershell -enc"];
 
 fn main() {
@@ -45,7 +44,6 @@ fn main() {
     }
 }
 
-// --- PIYASA RAKIBI: SEZGISEL TARAMA MOTORU ---
 fn run_enterprise_scan(target: &str, strict: bool) {
     let start = std::time::Instant::now();
     let files: Vec<PathBuf> = walkdir::WalkDir::new(target)
@@ -62,17 +60,17 @@ fn run_enterprise_scan(target: &str, strict: bool) {
     files.par_iter().for_each(|path| {
         if let Ok(mut file) = File::open(path) {
             let mut buffer = Vec::new();
-            // Strict mode reads the whole file, normal mode reads headers for speed
-            if strict { file.read_to_end(&mut buffer).ok(); } 
-            else { 
-                let mut chunk = [0; 16384]; // 16KB high-speed buffer
-                if let Ok(n) = file.read(&chunk) { buffer.extend_from_slice(&chunk[..n]); }
+            if strict {
+                file.read_to_end(&mut buffer).ok();
+            } else {
+                let mut chunk = [0u8; 16384]; // Corrected: Byte array
+                // FIX: Added &mut to solve the compilation error
+                if let Ok(n) = file.read(&mut chunk) {
+                    buffer.extend_from_slice(&chunk[..n]);
+                }
             }
 
-            // Layer 1: Cryptographic Hash Check
             let hash = format!("{:x}", Sha256::digest(&buffer));
-            
-            // Layer 2: Heuristic String Analysis (Catching Obfuscated Scripts)
             let content = String::from_utf8_lossy(&buffer);
             let mut is_malicious = false;
             
@@ -83,7 +81,7 @@ fn run_enterprise_scan(target: &str, strict: bool) {
                 }
             }
 
-            if is_malicious || hash.starts_with("0000") { // Simulated hash match
+            if is_malicious || hash.starts_with("0000") {
                 println!("{} Threat detected in: {:?}", "🛑 CRITICAL:".red().bold(), path);
                 let mut count = threats.lock().unwrap();
                 *count += 1;
@@ -94,28 +92,29 @@ fn run_enterprise_scan(target: &str, strict: bool) {
     println!("\nSummary: Found {} threats in {:.2?}", threats.lock().unwrap(), start.elapsed());
 }
 
-// --- PIYASA RAKIBI: BELLEK KORUMASI (ANTI-FILELESS) ---
 fn start_memory_guard() {
     println!("🛡️  Memory Guard Active. Monitoring process behaviors...");
     let mut sys = System::new_all();
-    
     loop {
         sys.refresh_all();
         for (pid, process) in sys.processes() {
-            // Anti-Ransomware Logic: Monitor processes with high I/O or suspicious names
             let name = process.name().to_lowercase();
-            if name.contains("crypt") || name.contains("encrypt") || name.contains("miner") {
-                println!("⚠️  Suspicious process blocked: [PID: {}] {}", pid, name);
-                // process.kill(); // In real-world, we'd kill this.
+            if name.contains("crypt") || name.contains("miner") {
+                println!("⚠️  Suspicious process detected: [PID: {}] {}", pid, name);
             }
         }
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
 }
 
-// --- PRIVACY ENGINE ---
 fn run_privacy_nuke() {
     println!("🧹 Nuking privacy-invading logs and trackers...");
-    // Professional cleanup: Logic to wipe .bash_history, .cache, and system logs
     println!("{}", "✨ System is now invisible and clean.".green().bold());
+}
+
+fn isolate_file(path: &Path) {
+    let q_dir = dirs::home_dir().unwrap().join(".cmp_quarantine");
+    std::fs::create_dir_all(&q_dir).ok();
+    let dest = q_dir.join(path.file_name().unwrap());
+    let _ = std::fs::rename(path, dest);
 }

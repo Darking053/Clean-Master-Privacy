@@ -5,8 +5,9 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch: # Manuel tetikleme (lazım olur)
   schedule:
-    - cron: '0 0 * * 0' # Haftalık otomatik bağımlılık ve özellik kontrolü
+    - cron: '0 0 * * 0'
 
 jobs:
   build-and-evolve:
@@ -17,24 +18,37 @@ jobs:
       issues: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Tüm geçmişi çek ki AI değişiklikleri analiz edebilsin
+          fetch-depth: 0
 
-      - name: Install System Dependencies
+      # HATASIZ KURULUM: GTK4 için eksik olan tüm grafik kütüphanelerini ekledim.
+      - name: Hardened System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config build-essential libgtk-4-dev \
-            libadwaita-1-dev libglib2.0-dev libgirepository1.0-dev libxml2-dev
+          sudo apt-get install -y \
+            pkg-config build-essential \
+            libgtk-4-dev libadwaita-1-dev \
+            libglib2.0-dev libgirepository1.0-dev \
+            libxml2-dev libpango1.0-dev \
+            libcairo2-dev libgdk-pixbuf-2.0-dev \
+            libgraphene-1.0-dev graphene-tests
 
-      - name: Setup Rust
+      - name: Setup Optimized Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
-      # 1. OTOMATİK GÜNCELLEME: Bağımlılıkları kontrol et ve güncelle
+      # ÖNCE KONTROL: Kodda hata varsa derlemeye geçmeden uyarır.
+      - name: Quality Gate (Linting)
+        run: cargo clippy -- -D warnings
+        continue-on-error: true
+
       - name: Update Dependencies
         run: cargo update
 
-      # 2. DERLEME VE HATA YAKALAMA
+      # DERLEME: Çıktıları ve hataları izole eder.
       - name: Build Optimized Binary
         id: cargo_build
         run: |
@@ -42,50 +56,45 @@ jobs:
           cargo build --release --verbose 2> build_error.log
         continue-on-error: true 
 
-      # 3. HATA ÇIKARSA: AI ANALİZİ VE OTOMATİK ISSUE/PATCH ÖNERİSİ
+      # HATA ANALİZİ: Gerçekten işe yarayan Issue açma scripti.
       - name: AI Fault Analysis
         if: steps.cargo_build.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const log = fs.readFileSync('build_error.log', 'utf8').substring(0, 2000);
-            const issueBody = `🚨 **Otomatik Hata Analizi Raporu** \n\n\`\`\`\n${log}\n\`\`\` \n\n💡 **AI Çözüm Önerisi:** Bağımlılık çakışması veya eksik kütüphane tespit edildi. \`Cargo.toml\` içindeki sürüm numaralarını ve sistem paketlerini kontrol edin.`;
-            
+            let log = "Hata dosyası okunamadı.";
+            if (fs.existsSync('build_error.log')) {
+              log = fs.readFileSync('build_error.log', 'utf8').substring(0, 2500);
+            }
+            const body = `🚨 **KRİTİK: CMP Derleme Hatası**\n\n\`\`\`\n${log}\n\`\`\`\n\n💡 **Sistem Notu:** Bağımlılıklar veya Cargo.toml kontrol edilmeli.`;
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "🛠️ Fix Required: Build Failure detected by CMP-AI",
-              body: issueBody,
+              title: "🛠️ Fix Required: Build Failure",
+              body: body,
               labels: ['critical', 'automated-fix-needed']
             });
             process.exit(1);
 
-      # 4. BAŞARILIYSA: OTOMATİK RELEASE VE ÖZELLİK GÜNCELLEMESİ
-      - name: Create Release and Auto-Changelog
+      # BAŞARILIYSA: Otomatik Release (Binary dosyasıyla beraber)
+      - name: Auto Release
         if: steps.cargo_build.outcome == 'success' && github.event_name == 'push'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          name: "CMP Release v${{ github.run_number }} - Otomatik Özellik Güncellemesi"
-          body: |
-            🚀 **Yeni Özellikler ve İyileştirmeler:**
-            - Kod kalitesi AI tarafından denetlendi.
-            - Bağımlılıklar son sürüme yükseltildi.
-            - Linux Binary dosyası optimize edildi.
+          name: "CMP Ultra Release v${{ github.run_number }}"
+          body: "🚀 Bu sürüm otomatik olarak derlendi ve optimize edildi."
           files: target/release/clean-master-privacy
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  # 5. OTOMATİK DAL TEMİZLİĞİ VE MERGE
+  # OTOMATİK PR YÖNETİMİ
   cleanup:
     needs: build-and-evolve
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - name: Auto-Merge and Branch Delete
+      - name: Auto-Merge
         uses: "pascalgn/automerge-action@v0.16.2"
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

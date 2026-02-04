@@ -1,24 +1,36 @@
-name: Build Clean Master Privacy
+name: Build & Release Clean Master Privacy
 
 on:
   push:
-    branches: [ "main" ]
-
+    tags:
+      - 'v*' 
 jobs:
   release:
-    name: Build & Release Binary
+    name: Build and Create Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build Optimized Release
+     
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build Optimized Binary
         run: cargo build --release
 
-      - name: Create Artifact
-        uses: actions/upload-artifact@v3
+      - name: Build .deb Package
+        run: cargo deb
+
+     
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: clean-master-privacy-linux
-          path: target/release/clean-master-privacy
+          files: |
+            target/release/clean-master-privacy
+            target/debian/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

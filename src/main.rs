@@ -10,7 +10,7 @@ use sysinfo::{ProcessExt, System, SystemExt};
 
 #[derive(Parser)]
 #[command(name = "clean-master-privacy")]
-#[command(version = "1.0.0")]
+#[command(version = "1.0.1")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -18,14 +18,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Deep scan: Signatures + Heuristics + AI-Driven logic
+    /// Deep scan for threats and auto-quarantine
     Scan {
         #[arg(short, long, default_value = "/home")]
         path: String,
         #[arg(short, long)]
         strict: bool,
     },
-    /// Real-time Monitor: Shields the RAM from fileless attacks
+    /// Real-time Monitor: Shields the RAM
     Guard,
     /// Privacy Clean: Wipe system footprints
     Clean,
@@ -54,7 +54,6 @@ fn run_enterprise_scan(target: &str, strict: bool) {
         .collect();
 
     println!("🚀 Analyzing {} files with Multi-Layered Engine...", files.len());
-
     let threats = Arc::new(Mutex::new(0));
 
     files.par_iter().for_each(|path| {
@@ -63,8 +62,7 @@ fn run_enterprise_scan(target: &str, strict: bool) {
             if strict {
                 file.read_to_end(&mut buffer).ok();
             } else {
-                let mut chunk = [0u8; 16384]; // Corrected: Byte array
-                // FIX: Added &mut to solve the compilation error
+                let mut chunk = [0u8; 16384];
                 if let Ok(n) = file.read(&mut chunk) {
                     buffer.extend_from_slice(&chunk[..n]);
                 }
@@ -75,21 +73,33 @@ fn run_enterprise_scan(target: &str, strict: bool) {
             let mut is_malicious = false;
             
             for pattern in HEURISTIC_PATTERNS {
-                if content.contains(pattern) {
-                    is_malicious = true;
-                    break;
-                }
+                if content.contains(pattern) { is_malicious = true; break; }
             }
 
+            // Simulated malware match (e.g., hash starting with 0000)
             if is_malicious || hash.starts_with("0000") {
-                println!("{} Threat detected in: {:?}", "🛑 CRITICAL:".red().bold(), path);
+                println!("{} Threat detected: {:?}", "🛑 CRITICAL:".red().bold(), path);
                 let mut count = threats.lock().unwrap();
                 *count += 1;
+                // USE: isolate_file is now active
+                isolate_file(path);
             }
         }
     });
 
-    println!("\nSummary: Found {} threats in {:.2?}", threats.lock().unwrap(), start.elapsed());
+    let found = *threats.lock().unwrap();
+    println!("\nSummary: Found {} threats in {:.2?}", found, start.elapsed());
+}
+
+fn isolate_file(path: &Path) {
+    let q_dir = dirs::home_dir().unwrap().join(".cmp_quarantine");
+    let _ = std::fs::create_dir_all(&q_dir);
+    if let Some(file_name) = path.file_name() {
+        let dest = q_dir.join(file_name);
+        if std::fs::rename(path, &dest).is_ok() {
+            println!("   {} Moved to quarantine.", "->".yellow());
+        }
+    }
 }
 
 fn start_memory_guard() {
@@ -100,7 +110,7 @@ fn start_memory_guard() {
         for (pid, process) in sys.processes() {
             let name = process.name().to_lowercase();
             if name.contains("crypt") || name.contains("miner") {
-                println!("⚠️  Suspicious process detected: [PID: {}] {}", pid, name);
+                println!("⚠️  Suspicious process: [PID: {}] {}", pid, name);
             }
         }
         std::thread::sleep(std::time::Duration::from_secs(3));
@@ -110,11 +120,4 @@ fn start_memory_guard() {
 fn run_privacy_nuke() {
     println!("🧹 Nuking privacy-invading logs and trackers...");
     println!("{}", "✨ System is now invisible and clean.".green().bold());
-}
-
-fn isolate_file(path: &Path) {
-    let q_dir = dirs::home_dir().unwrap().join(".cmp_quarantine");
-    std::fs::create_dir_all(&q_dir).ok();
-    let dest = q_dir.join(path.file_name().unwrap());
-    let _ = std::fs::rename(path, dest);
 }

@@ -1,9 +1,9 @@
 [package]
 name = "clean-master-privacy"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["CMP Dev Team"]
 edition = "2021"
-description = "High-performance Linux security and privacy tool"
+description = "Enterprise-grade Linux security and privacy suite"
 license = "GPL-3.0"
 
 [dependencies]
@@ -13,8 +13,8 @@ rayon = "1.7"
 sha2 = "0.10"
 walkdir = "2"
 sysinfo = "0.29"
-chrono = "0.4"
 dirs = "5.0"
+chrono = "0.4"
 
 [package.metadata.deb]
 maintainer = "CMP Security <support@cmp-privacy.com>"
@@ -22,8 +22,9 @@ copyright = "2026, Clean Master Privacy"
 priority = "optional"
 section = "utils"
 extended-description = """
-Clean Master Privacy is an enterprise-grade security suite 
-providing heuristic scanning, memory protection, and privacy cleaning.
+A high-performance security suite written in Rust. 
+Includes heuristic scanning, real-time memory monitoring, 
+and privacy-focused system cleaning.
 """
 assets = [
     ["target/release/clean-master-privacy", "/usr/bin/clean-master-privacy", "755"],

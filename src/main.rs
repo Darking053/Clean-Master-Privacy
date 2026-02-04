@@ -1,18 +1,16 @@
+use adw::prelude::*;
+use async_std::task;
 use clap::{Parser, Subcommand};
-use colored::*;
+use gtk4::{self as gtk, glib, Application, ApplicationWindow, Button, Label, Box as GtkBox, Orientation, ProgressBar};
+use libadwaita as adw;
+use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use sysinfo::{ProcessExt, System, SystemExt};
-use gtk4::{self as gtk, glib, Application, ApplicationWindow, Button, Label, Box as GtkBox, Orientation, ProgressBar};
-use libadwaita as adw;
-use async_std::task;
-use notify::{Watcher, RecursiveMode, Config, EventKind};
 
-// --- CLI Structure ---
+// --- CLI Yapısı ---
 #[derive(Parser)]
 #[command(name = "clean-master-privacy", version = "1.2.0")]
 struct Cli {
@@ -22,24 +20,19 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Scan { #[arg(short, long, default_value = "/home")] path: String },
+    Scan { 
+        #[arg(short, long, default_value = "/home")] 
+        path: String 
+    },
     Guard,
-    Clean,
 }
 
-// --- Threat Intelligence Database ---
+// --- Tehdit İstihbarat Veritabanı ---
 const MALICIOUS_PATTERNS: &[&str] = &[
     "eval(base64_decode", "rm -rf / --no-preserve-root", "/etc/shadow",
     "nc -e /bin/sh", "python -c 'import socket;os.dup2'", "memfd_create"
 ];
 
-// --- APP STATE ---
-struct AppState {
-    threat_count: usize,
-    is_guard_active: bool,
-}
-
-// --- MAIN ---
 fn main() -> glib::ExitCode {
     let cli = Cli::parse();
 
@@ -54,59 +47,61 @@ fn main() -> glib::ExitCode {
             task::block_on(async { start_realtime_protection().await });
             glib::ExitCode::SUCCESS
         },
-        _ => start_gui_application(),
+        None => {
+            // GUI başlatma
+            let application = Application::builder()
+                .application_id("com.cmp.antivirus")
+                .build();
+            application.connect_activate(build_ui);
+            application.run()
+        }
     }
 }
 
-// --- GUI IMPLEMENTATION ---
-fn start_gui_application() -> glib::ExitCode {
-    let application = Application::builder()
-        .application_id("com.cmp.antivirus")
-        .build();
-    application.connect_activate(build_ui);
-    application.run()
-}
-
+// --- GUI Arayüzü ---
 fn build_ui(app: &Application) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .default_width(850)
-        .default_height(650)
-        .title("Clean Master Privacy - Cyber Shield")
+                .default_width(800)
+        .default_height(600)
+        .title("CMP - Cyber Shield")
         .build();
 
-    let content = GtkBox::new(Orientation::Vertical, 15);
+    let content = GtkBox::new(Orientation::Vertical, 20);
     content.set_margin_all(30);
 
-    let status_label = Label::new(Some("🛡️ System Status: Secure"));
-    status_label.set_margin_bottom(10);
+    let status_label = Label::builder()
+        .label("🛡️ Sistem Durumu: Güvende")
+        .css_classes(["title-2"])
+        .build();
     
     let progress_bar = ProgressBar::new();
+    progress_bar.set_hexpand(true);
     
-    // Scan Button
-    let scan_btn = Button::with_label("🚀 Start Deep Scan");
+    let scan_btn = Button::with_label("🚀 Derin Taramayı Başlat");
     scan_btn.add_css_class("suggested-action");
     
-    // Real-Time Guard Toggle
-    let guard_btn = Button::with_label("🛡️ Enable Real-Time Guard");
+    let guard_btn = Button::with_label("🛡️ Gerçek Zamanlı Korumayı Aç");
 
-    // UI Logic
+    // UI Mantığı
     let status_clone = status_label.clone();
     let progress_clone = progress_bar.clone();
     
-    scan_btn.connect_clicked(move |_| {
+    scan_btn.connect_clicked(move |btn| {
         let st = status_clone.clone();
         let pb = progress_clone.clone();
-        task::spawn_local(async move {
-            st.set_text("Scanning system for threats...");
-            run_scan_engine("/home", Some(st.clone()), Some(pb)).await;
+        btn.set_sensitive(false); // Tarama sırasında butonu kapat
+        
+        glib::spawn_future_local(async move {
+            st.set_text("Sistem taranıyor, lütfen bekleyin...");
+            run_scan_engine("/home", Some(st), Some(pb)).await;
         });
     });
 
     guard_btn.connect_clicked(move |btn| {
-        btn.set_label("🛡️ Guard Active (Watching /home)");
+        btn.set_label("🛡️ Kalkan Aktif");
         btn.set_sensitive(false);
-        task::spawn_local(async move {
+        glib::spawn_future_local(async move {
             start_realtime_protection().await;
         });
     });
@@ -117,12 +112,13 @@ fn build_ui(app: &Application) {
     content.append(&guard_btn);
 
     window.set_child(Some(&content));
-    window.show();
+    window.present();
 }
 
-// --- CORE ENGINE: SCANNER ---
+// --- Tarama Motoru ---
 async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<ProgressBar>) {
-    let files: Vec<PathBuf> = walkdir::WalkDir::new(target)
+    let target_path = PathBuf::from(target);
+    let files: Vec<PathBuf> = walkdir::WalkDir::new(target_path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().is_file())
@@ -132,12 +128,15 @@ async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<Progress
     let total = files.len() as f64;
     let threats = Arc::new(Mutex::new(0));
 
+    // Paralel tarama
     files.par_iter().enumerate().for_each(|(i, path)| {
         let progress = i as f64 / total;
         
         if let Some(ref p_bar) = pb {
             let p = p_bar.clone();
-            glib::idle_add_local_once(move || p.set_fraction(progress));
+            glib::idle_add_local_once(move || {
+                p.set_fraction(progress);
+            });
         }
 
         if is_file_malicious(path) {
@@ -149,55 +148,50 @@ async fn run_scan_engine(target: &str, label: Option<Label>, pb: Option<Progress
 
     let found = *threats.lock().unwrap();
     if let Some(ref l) = label {
-        l.set_text(&format!("Scan Complete! Found {} threats. System isolated.", found));
+        l.set_text(&format!("Tarama Tamamlandı! {} tehdit izole edildi.", found));
     }
 }
 
-// --- CORE ENGINE: REAL-TIME GUARD ---
+// --- Gerçek Zamanlı Koruma ---
 async fn start_realtime_protection() {
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut watcher = notify::RecommendedWatcher::new(tx, Config::default()).unwrap();
+    let mut watcher = RecommendedWatcher::new(tx, Config::default()).expect("Watcher başlatılamadı");
     
-    let watch_path = dirs::home_dir().unwrap_or(PathBuf::from("/home"));
-    watcher.watch(&watch_path, RecursiveMode::Recursive).unwrap();
-
-    println!("Shield Active on {:?}", watch_path);
+    let watch_path = dirs::home_dir().expect("Home dizini bulunamadı");
+    watcher.watch(&watch_path, RecursiveMode::Recursive).expect("İzleme başarısız");
 
     for res in rx {
         if let Ok(event) = res {
-            match event.kind {
-                EventKind::Create(_) | EventKind::Modify(_) => {
-                    for path in event.paths {
-                        if is_file_malicious(&path) {
-                            println!("🛑 THREAT BLOCKED: {:?}", path);
-                            isolate_threat(&path);
-                        }
+            if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+                for path in event.paths {
+                    if is_file_malicious(&path) {
+                        isolate_threat(&path);
+                        println!("🛑 TEHDİT ENGELLENDİ: {:?}", path);
                     }
                 }
-                _ => {}
             }
         }
     }
 }
 
-// --- UTILS ---
+// --- Yardımcı Fonksiyonlar ---
 fn is_file_malicious(path: &Path) -> bool {
     if let Ok(mut file) = File::open(path) {
-        let mut buffer = [0u8; 10240]; // Scan first 10KB for speed
-        if file.read(&mut buffer).is_ok() {
-            let content = String::from_utf8_lossy(&buffer);
-            for pattern in MALICIOUS_PATTERNS {
-                if content.contains(pattern) { return true; }
-            }
+        let mut buffer = [0u8; 10240]; 
+        if let Ok(bytes_read) = file.read(&mut buffer) {
+            let content = String::from_utf8_lossy(&buffer[..bytes_read]);
+            return MALICIOUS_PATTERNS.iter().any(|pattern| content.contains(pattern));
         }
     }
     false
 }
 
 fn isolate_threat(path: &Path) {
-    let quarantine_path = dirs::home_dir().unwrap().join(".cmp_quarantine");
-    let _ = fs::create_dir_all(&quarantine_path);
-    if let Some(fname) = path.file_name() {
-        let _ = fs::rename(path, quarantine_path.join(fname));
+    if let Some(home) = dirs::home_dir() {
+        let quarantine_path = home.join(".cmp_quarantine");
+        let _ = fs::create_dir_all(&quarantine_path);
+        if let Some(fname) = path.file_name() {
+            let _ = fs::rename(path, quarantine_path.join(fname));
+        }
     }
 }

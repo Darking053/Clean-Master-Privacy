@@ -20,16 +20,24 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # KRİTİK ADIM: Eksik olan sistem kütüphanelerini yüklüyoruz
-      - name: Install System Dependencies (GTK4 & Adwaita)
+      # TÜM SİSTEM BAĞIMLILIKLARI (GTK4, GLIB, PKG-CONFIG)
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config build-essential
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            build-essential \
+            pkg-config \
+            libglib2.0-dev \
+            libgstrtspserver-1.0-dev \
+            libgraphene-1.0-dev
 
       - name: Install cargo-deb
         run: cargo install cargo-deb
 
       - name: Build Optimized Binary
+        # PKG_CONFIG_PATH'i sağlama alıyoruz
         run: cargo build --release
 
       - name: Build .deb Package

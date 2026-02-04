@@ -20,11 +20,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # GTK4 development libraries for building
-      - name: Install GTK4 Dev Libraries
+      # KRİTİK ADIM: Eksik olan sistem kütüphanelerini yüklüyoruz
+      - name: Install System Dependencies (GTK4 & Adwaita)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev pkg-config build-essential
 
       - name: Install cargo-deb
         run: cargo install cargo-deb

@@ -200,7 +200,7 @@ impl ClamRustApp {
             ui.label("In-Progress File:");
             ui.label(egui::RichText::new(&self.current_file).monospace().size(11.0).color(egui::Color32::LIGHT_BLUE));
             ui.add_space(10.0);
-            ui.add(egui::ProgressBar::new(0.5).animated(self.is_working));
+            ui.add(egui::ProgressBar::new(0.5).animate(self.is_working));
         });
 
         ui.add_space(20.0);

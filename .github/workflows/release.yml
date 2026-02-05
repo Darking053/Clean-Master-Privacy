@@ -1,94 +1,37 @@
-name: CMP Autonomous Evolution Pipeline
+name: Rust DEB Build
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+    branches: [ "main" ]
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
     steps:
-      # 1. Kaynağı çek (checkout)
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v3
 
-      # 2. Sistem bağımlılıklarını kur
-      - name: Install System Dependencies
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Build Binary
+        run: cargo build --release
+
+      - name: Prepare DEB Structure
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config build-essential \
-            libgtk-4-dev libadwaita-1-dev \
-            libglib2.0-dev libgirepository1.0-dev \
-            libxml2-dev libpango1.0-dev \
-            libcairo2-dev libgdk-pixbuf-2.0-dev \
-            libgraphene-1.0-dev
+          mkdir -p pkg/usr/bin
+          mkdir -p pkg/DEBIAN
+          cp target/release/clean-master-privacy pkg/usr/bin/
+          # Control dosyasını oluştur veya kopyala
+          echo "Package: clean-master-privacy
+          Version: 1.0.0
+          Architecture: amd64
+          Maintainer: Dev
+          Description: Rust Clean Tool" > pkg/DEBIAN/control
+          
+          dpkg-deb --build pkg clean-master-rust.deb
 
-      # 3. Rust toolchain kurulumunu yap
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Upload
+        uses: actions/upload-artifact@v3
         with:
-          components: clippy, rustfmt
-
-      # 4. Kod formatlama ve düzeltme işlemi
-      - name: Autonomous Code Healing
-        run: |
-          cargo fmt --all
-          cargo fix --allow-dirty --allow-staged
-
-      # 5. Kodun otomatik olarak commit edilmesi
-      - name: Commit Autonomous Fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: autonomous code healing and formatting"
-
-      # 6. Derlemeyi yap
-      - name: Build Optimized Binary
-        id: cargo_build
-        run: |
-          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
-          cargo build --release --verbose
-
-      # 7. Çıktıyı assets dizinine kopyala
-      - name: Prepare Release Assets
-        if: success() && github.event_name == 'push'
-        run: |
-          mkdir -p assets
-          cp target/release/clean-master-privacy assets/cmp-ultra-linux-x86_64
-
-      # 8. Binary'yi Release'e yükle
-      - name: Auto Release
-        if: success() && github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ github.run_number }}.0
-          name: "CMP Ultra Build ${{ github.run_number }}"
-          body: "Automated production build. All systems verified."
-          files: assets/cmp-ultra-linux-x86_64
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      # 9. .deb paket oluşturma ve yükleme
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Build Debian Package
-        run: |
-          cargo build --release
-          cargo deb
-
-      - name: Upload .deb to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: target/debian/*.deb
-          token: ${{ secrets.GITHUB_TOKEN }}
-
+          name: deb-package
+          path: clean-master-rust.deb

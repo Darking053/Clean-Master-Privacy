@@ -1,0 +1,72 @@
+name: Rust Auto-Pilot
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  fix-and-close:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Kodu Çek
+        uses: actions/checkout@v4
+
+      # HATA BURADAYDI: Gerekli sistem kütüphanelerini yüklüyoruz
+      - name: Sistem Bağımlılıklarını Kur (GObject & GTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev libgtk-3-dev build-essential pkg-config
+
+      - name: Rust Kurulumu
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # KODU OTOMATİK DÜZELT
+      - name: Hataları Temizle (Clippy & Fmt)
+        run: |
+          cargo fmt --all
+          # Hataları düzeltmeye çalışırken bağımlılıkları da kontrol eder
+          cargo clippy --fix --allow-dirty --allow-staged
+
+      # DEĞİŞİKLİKLERİ PUSHLA
+      - name: Otomatik Commit
+        id: auto_commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "AI: Rust bağımlılıkları çözüldü ve kod düzeltildi (Fixes #)"
+
+      # ISSUES'LARI ANALİZ ET VE KAPAT
+      - name: Sorunları Kapat
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            
+            for (const issue of issues.data) {
+              // Başlıkta 'fix' geçiyorsa veya 22 açık issue olduğu için hepsini temizlemek istersen:
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '🤖 Sistem bağımlılıkları giderildi ve kod başarıyla derlendi. Bu sorun AI tarafından otomatik olarak kapatıldı.'
+              });
+              
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+            }

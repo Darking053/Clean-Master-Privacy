@@ -5,26 +5,25 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Manuel tetikleme (lazım olur)
+  workflow_dispatch: 
   schedule:
     - cron: '0 0 * * 0'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
 
 jobs:
   build-and-evolve:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # HATASIZ KURULUM: GTK4 için eksik olan tüm grafik kütüphanelerini ekledim.
-      - name: Hardened System Dependencies
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -33,70 +32,73 @@ jobs:
             libglib2.0-dev libgirepository1.0-dev \
             libxml2-dev libpango1.0-dev \
             libcairo2-dev libgdk-pixbuf-2.0-dev \
-            libgraphene-1.0-dev graphene-tests
+            libgraphene-1.0-dev
 
-      - name: Setup Optimized Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 
-      # ÖNCE KONTROL: Kodda hata varsa derlemeye geçmeden uyarır.
       - name: Quality Gate (Linting)
         run: cargo clippy -- -D warnings
         continue-on-error: true
 
-      - name: Update Dependencies
-        run: cargo update
-
-      # DERLEME: Çıktıları ve hataları izole eder.
       - name: Build Optimized Binary
         id: cargo_build
         run: |
-          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+          # GTK4 derlemesi için gerekli path tanımlaması
+          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
           cargo build --release --verbose 2> build_error.log
-        continue-on-error: true 
 
-      # HATA ANALİZİ: Gerçekten işe yarayan Issue açma scripti.
-      - name: AI Fault Analysis
-        if: steps.cargo_build.outcome == 'failure'
+      - name: AI Fault Analysis & Issue Creation
+        if: failure() && steps.cargo_build.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            let log = "Hata dosyası okunamadı.";
+            let log = "No error log found.";
             if (fs.existsSync('build_error.log')) {
-              log = fs.readFileSync('build_error.log', 'utf8').substring(0, 2500);
+              log = fs.readFileSync('build_error.log', 'utf8').substring(0, 2000);
             }
-            const body = `🚨 **KRİTİK: CMP Derleme Hatası**\n\n\`\`\`\n${log}\n\`\`\`\n\n💡 **Sistem Notu:** Bağımlılıklar veya Cargo.toml kontrol edilmeli.`;
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "🛠️ Fix Required: Build Failure",
-              body: body,
-              labels: ['critical', 'automated-fix-needed']
+              title: "🚨 Build Failure: CMP Ultra Auto-Evolution Stalled",
+              body: `### Error Diagnostics\n\`\`\`\n${log}\n\`\`\`\n\n**Action:** Please check Cargo.toml dependencies and GTK4 headers.`,
+              labels: ['bug', 'critical']
             });
-            process.exit(1);
 
-      # BAŞARILIYSA: Otomatik Release (Binary dosyasıyla beraber)
+      - name: Prepare Release Assets
+        if: success() && github.event_name == 'push'
+        run: |
+          mkdir -p assets
+          # Binary dosyasını kopyalayıp isimlendiriyoruz
+          cp target/release/clean-master-privacy assets/cmp-ultra-linux-x86_64
+
       - name: Auto Release
-        if: steps.cargo_build.outcome == 'success' && github.event_name == 'push'
+        if: success() && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: "CMP Ultra Release v${{ github.run_number }}"
-          body: "🚀 Bu sürüm otomatik olarak derlendi ve optimize edildi."
-          files: target/release/clean-master-privacy
+          tag_name: v1.${{ github.run_number }}.0
+          name: "CMP Ultra Release v1.${{ github.run_number }}"
+          body: "🚀 Automated build successful. Performance optimized and security patterns updated."
+          files: assets/cmp-ultra-linux-x86_64
+          generate_release_notes: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # OTOMATİK PR YÖNETİMİ
-  cleanup:
+  # Pull Request'ler için güvenli otomatik birleştirme
+  automerge:
     needs: build-and-evolve
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - name: Auto-Merge
-        uses: "pascalgn/automerge-action@v0.16.2"
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          MERGE_METHOD: "squash"
-          MERGE_DELETE_BRANCH: "true"
+      - name: Merge PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              merge_method: 'squash'
+            })

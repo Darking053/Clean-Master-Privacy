@@ -1,4 +1,4 @@
-name: CI-CD Build
+name: CI-CD Build & Release
 
 on:
   push:
@@ -7,8 +7,10 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    permissions: # GitHub'da Release oluşturabilmesi için gerekli izinler
+      contents: write
     steps:
-      - uses: actions/checkout@v4 # v3 yerine v4
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         run: rustup update stable
@@ -16,7 +18,7 @@ jobs:
       - name: Install GTK Dev Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev libdbus-1-dev pkg-config
 
       - name: Build Binary
         run: cargo build --release
@@ -25,8 +27,9 @@ jobs:
         run: |
           mkdir -p package/usr/bin
           mkdir -p package/DEBIAN
-          # Binary dosyasını kopyala
-          cp target/release/clean-master-privacy package/usr/bin/
+          # Binary'yi kopyala (Dosya adını sabitleyerek)
+          find target/release -maxdepth 1 -type f -executable -exec cp {} package/usr/bin/clean-master-privacy \;
+          
           # Control dosyasını oluştur
           cat <<EOF > package/DEBIAN/control
           Package: clean-master-privacy
@@ -34,15 +37,33 @@ jobs:
           Section: utils
           Priority: optional
           Architecture: amd64
-          Depends: clamav
+          Depends: clamav, libgtk-3-0, libdbus-1-3
           Maintainer: Developer
           Description: ClamTK alternative written in pure Rust for privacy and cleanup.
           EOF
-          # .deb paketini build et
+          
+          chmod 755 package/usr/bin/clean-master-privacy
+          chmod 755 package/DEBIAN/control
           dpkg-deb --build package clean-master-privacy.deb
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4 # Hatalı olan v3'ü v4 ile değiştirdik
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          name: CleanMaster-Binary-DEB
+          tag_name: v1.1.${{ github.run_number }} # Her build'de artan otomatik versiyon (v1.1.1, v1.1.2...)
+          name: Release v1.1.${{ github.run_number }}
+          files: clean-master-privacy.deb
+          body: |
+            Automated build for Clean-Master-Privacy.
+            - Compiled with Rust
+            - ClamTK-style UI
+            - Included: .deb package for Debian/Ubuntu
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Artifact (Backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CleanMaster-DEB
           path: clean-master-privacy.deb

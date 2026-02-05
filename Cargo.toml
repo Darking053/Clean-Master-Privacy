@@ -1,29 +1,11 @@
-[package]
-name = "clean-master-privacy"
-version = "1.2.0" 
-authors = ["CMP Dev Team"]
-edition = "2021"
-description = "Enterprise-grade Linux security and privacy suite with Real-Time Guard"
-license = "GPL-3.0"
-
 [dependencies]
-# CLI & Terminal
+gtk4 = "0.7"
+glib = "0.17"
 clap = { version = "4.0", features = ["derive"] }
-colored = "2.0"
-
-# Core Logic & Security
-rayon = "1.7"      
-sha2 = "0.10"      
-walkdir = "2"     
-sysinfo = "0.29"   
-dirs = "5.0"       
-chrono = "0.4"    
-
-# GUI Stack
-gtk4 = "0.7" 
-libadwaita = "0.5" 
-
-# Async & Event Handling
-async-std = "1.12" 
+walkdir = "2.3"
+rayon = "1.7"
+notify = "6.0"
+dirs = "5.0"
 futures = "0.3"
-notify = "6.1"      
+sha2 = "0.10"
+humantime = "2.1"

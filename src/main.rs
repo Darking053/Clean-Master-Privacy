@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
 use tokio::runtime::Runtime;
+use dirs;
 
 const APP_NAME: &str = "Clean-Master-Privacy Ultra";
 

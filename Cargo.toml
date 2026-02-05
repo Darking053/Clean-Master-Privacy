@@ -2,25 +2,13 @@
 name = "clean-master-privacy"
 version = "2.0.0"
 edition = "2021"
-description = "CMP Ultra - Privacy focused antivirus"
-license = "GPL-3.0"
-authors = ["Your Name"]
-repository = "https://github.com/you/clean-master-privacy"
 
-[package.metadata.deb]
-maintainer = "Your Name <you@example.com>"
-depends = [
-  "libgtk-4-1",
-  "libglib2.0-0",
-  "libadwaita-1-0",
-  "libpango-1.0-0",
-  "libcairo2",
-  "libgdk-pixbuf-2.0-0"
-]
-section = "utils"
-priority = "optional"
-assets = [
-  ["target/release/clean-master-privacy", "usr/bin/cmp-ultra", "755"],
-  ["assets/cmp.desktop", "usr/share/applications/", "644"],
-  ["assets/icon.png", "usr/share/icons/hicolor/256x256/apps/cmp.png", "644"]
-]
+[dependencies]
+gtk4 = { version = "0.9", features = ["v4_10"] }
+glib = "0.20"
+notify = "6.1"
+rayon = "1.5"
+tokio = { version = "1.36", features = ["full"] }
+dirs = "4.0"
+walkdir = "2.3"
+humantime = "2.1"

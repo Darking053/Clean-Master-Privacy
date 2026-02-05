@@ -1,19 +1,23 @@
 [package]
 name = "clean-master-privacy"
-version = "1.5.0"
+version = "2.0.0"
 edition = "2021"
 
 [dependencies]
-# Bellek hatası giderilmiş, modern ve güvenli sürümler
+# GUI Core (Updated to 0.9/0.20 for security fix)
 gtk4 = { version = "0.9", features = ["v4_10"] }
 glib = "0.20"
 
-# Sistem ve Dosya İşlemleri
+# Filesystem & Monitoring
 walkdir = "2.5"
 notify = "6.1"
 dirs = "5.0"
 rayon = "1.10"
+
+# Security & Logs
 sha2 = "0.10"
 humantime = "2.1"
+
+# Async Engine
 futures = "0.3"
 tokio = { version = "1.36", features = ["full"] }

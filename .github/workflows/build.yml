@@ -1,0 +1,41 @@
+name: CI-CD Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        run: rustup update stable
+
+      - name: Install GTK Dev Tools
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev
+
+      - name: Build Binary
+        run: cargo build --release
+
+      - name: Package .deb
+        run: |
+          mkdir -p package/usr/bin
+          mkdir -p package/DEBIAN
+          cp target/release/clean-master-privacy package/usr/bin/
+          echo "Package: clean-master-privacy
+          Version: 1.1.0
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Depends: clamav
+          Maintainer: Developer
+          Description: ClamTK alternative written in pure Rust for privacy and cleanup." > package/DEBIAN/control
+          dpkg-deb --build package clean-master-privacy.deb
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: CleanMasterDEB
+          path: clean-master-privacy.deb

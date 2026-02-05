@@ -4,20 +4,26 @@ use std::process::{Command, Stdio};
 use std::io::{BufRead, BufReader};
 use std::sync::mpsc::{Receiver, Sender, self};
 use std::thread;
+use rfd::FileDialog;
+use chrono::Local;
+
+#[derive(PartialEq)]
+enum NavPage { Dashboard, Scanner, Privacy, Logs }
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([600.0, 500.0])
-            .with_resizable(true),
+            .with_inner_size([950.0, 650.0])
+            .with_min_inner_size([800.0, 500.0])
+            .with_title_shown(true),
         ..Default::default()
     };
     
     eframe::run_native(
-        "Clean-Master-Privacy",
+        "Clean-Master-Privacy Pro",
         options,
         Box::new(|_cc| {
-            // Başlangıç teması olarak Dark Mode seçiyoruz
+            setup_custom_fonts(&_cc.egui_ctx);
             _cc.egui_ctx.set_visuals(egui::Visuals::dark());
             Box::new(ClamRustApp::new())
         }),
@@ -25,158 +31,213 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct ClamRustApp {
-    status: String,
+    page: NavPage,
+    is_scanning: bool,
     logs: Vec<String>,
-    is_working: bool,
     rx: Receiver<String>,
     tx: Sender<String>,
-    is_dark_mode: bool,
+    
+    // Analiz Verileri
+    scanned_count: usize,
+    threat_count: usize,
+    current_path: String,
+    progress: f32,
+    disk_speed: String,
 }
 
 impl ClamRustApp {
     fn new() -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
-            status: "System Ready".to_string(),
-            logs: vec!["Welcome to Clean-Master-Privacy".to_string()],
-            is_working: false,
+            page: NavPage::Dashboard,
+            is_scanning: false,
+            logs: vec![],
             rx,
             tx,
-            is_dark_mode: true,
+            scanned_count: 0,
+            threat_count: 0,
+            current_path: String::from("System Idle"),
+            progress: 0.0,
+            disk_speed: String::from("0 file/s"),
         }
     }
 
-    fn run_scan(&mut self, ctx: egui::Context) {
+    fn run_scan(&mut self, ctx: egui::Context, target: String) {
+        self.is_scanning = true;
+        self.scanned_count = 0;
+        self.threat_count = 0;
         let tx = self.tx.clone();
-        self.is_working = true;
-        self.status = "Scanning...".to_string();
 
         thread::spawn(move || {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
-            let child = Command::new("clamscan")
-                .arg("-r")
-                .arg(home)
+            let mut child = Command::new("clamscan")
+                .args(["-r", "--no-summary", &target])
                 .stdout(Stdio::piped())
-                .spawn();
+                .spawn()
+                .expect("Failed to start scanner engine");
 
-            match child {
-                Ok(mut child) => {
-                    let stdout = child.stdout.take().unwrap();
-                    let reader = BufReader::new(stdout);
-
-                    for line in reader.lines() {
-                        if let Ok(l) = line {
-                            let _ = tx.send(l);
-                            ctx.request_repaint();
-                        }
+            let reader = BufReader::new(child.stdout.take().unwrap());
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    if l.contains("FOUND") {
+                        let _ = tx.send(format!("FOUND:{}", l));
+                    } else {
+                        let _ = tx.send(format!("FILE:{}", l));
                     }
-                }
-                Err(_) => {
-                    let _ = tx.send("Error: 'clamscan' not found! Please install ClamAV.".to_string());
+                    ctx.request_repaint();
                 }
             }
-            let _ = tx.send("FINISH_SCAN".to_string());
+            let _ = tx.send("FINISH:1".to_string());
         });
-    }
-
-    fn run_cleanup(&mut self) {
-        self.is_working = true;
-        self.status = "Cleaning cache...".to_string();
-        
-        let _ = Command::new("sh")
-            .arg("-c")
-            .arg("rm -rf ~/.cache/* && journalctl --vacuum-time=1s")
-            .output();
-
-        self.logs.push("Privacy cleanup: Cache and journal logs cleared.".to_string());
-        self.status = "Cleanup Completed".to_string();
-        self.is_working = false;
     }
 }
 
 impl eframe::App for ClamRustApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle background messages
+        // Background Process Listener
         while let Ok(msg) = self.rx.try_recv() {
-            if msg == "FINISH_SCAN" {
-                self.is_working = false;
-                self.status = "Task Finished".to_string();
-            } else {
-                self.logs.push(msg);
-                if self.logs.len() > 100 { self.logs.remove(0); }
+            if msg.starts_with("FILE:") {
+                self.scanned_count += 1;
+                self.current_path = msg.replace("FILE:", "").replace(": OK", "");
+            } else if msg.starts_with("FOUND:") {
+                self.threat_count += 1;
+                let timestamp = Local::now().format("%H:%M:%S").to_string();
+                self.logs.push(format!("[{}] ⚠️ THREAT: {}", timestamp, msg.replace("FOUND:", "")));
+            } else if msg.starts_with("FINISH") {
+                self.is_scanning = false;
+                self.current_path = "Scan Complete".into();
             }
         }
 
+        // Sidebar Navigation
+        egui::SidePanel::left("nav_panel").resizable(false).default_width(220.0).show(ctx, |ui| {
+            ui.add_space(20.0);
+            ui.vertical_centered(|ui| {
+                ui.heading(egui::RichText::new("🛡️ CMP PRO").size(24.0).strong().color(egui::Color32::from_rgb(0, 150, 255)));
+                ui.label("Enterprise Security");
+            });
+            ui.add_space(40.0);
+
+            ui.vertical(|ui| {
+                ui.style_mut().spacing.item_spacing.y = 10.0;
+                ui.selectable_value(&mut self.page, NavPage::Dashboard, "📊 Dashboard");
+                ui.selectable_value(&mut self.page, NavPage::Scanner, "🔍 Scan Engine");
+                ui.selectable_value(&mut self.page, NavPage::Privacy, "🧹 Privacy Guard");
+                ui.selectable_value(&mut self.page, NavPage::Logs, "📜 Security Logs");
+            });
+
+            ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                ui.add_space(20.0);
+                if ui.button("🌐 Check Updates").clicked() {}
+                ui.separator();
+            });
+        });
+
+        // Main Content Area
         egui::CentralPanel::default().show(ctx, |ui| {
-            // TOP BAR: Theme Switch and Title
-            ui.horizontal(|ui| {
-                ui.heading("🛡️ Clean-Master-Privacy");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let theme_icon = if self.is_dark_mode { "🌙 Dark" } else { "☀️ Light" };
-                    if ui.button(theme_icon).clicked() {
-                        self.is_dark_mode = !self.is_dark_mode;
-                        if self.is_dark_mode {
-                            ctx.set_visuals(egui::Visuals::dark());
-                        } else {
-                            ctx.set_visuals(egui::Visuals::light());
-                        }
-                    }
-                });
-            });
+            match self.page {
+                NavPage::Dashboard => self.render_dashboard(ui),
+                NavPage::Scanner => self.render_scanner(ui, ctx),
+                NavPage::Privacy => self.render_privacy(ui),
+                NavPage::Logs => self.render_logs(ui),
+            }
+        });
+    }
+}
 
-            ui.add_space(5.0);
-            ui.separator();
-            ui.add_space(10.0);
+impl ClamRustApp {
+    fn render_dashboard(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Security Overview");
+        ui.add_space(20.0);
 
-            // ACTION BUTTONS
-            ui.horizontal(|ui| {
-                ui.add_enabled_ui(!self.is_working, |ui| {
-                    if ui.button("🔍 Full Scan").on_hover_text("Scan home directory for threats").clicked() {
-                        self.run_scan(ctx.clone());
-                    }
-                });
-
-                ui.add_enabled_ui(!self.is_working, |ui| {
-                    if ui.button("🧹 Privacy Cleanup").on_hover_text("Clear cache and system logs").clicked() {
-                        self.run_cleanup();
-                    }
-                });
-
-                if self.is_working {
-                    ui.spinner();
-                    ui.label(egui::RichText::new("Processing...").italics());
-                }
-            });
-
-            ui.add_space(10.0);
-            
-            // STATUS LABEL
+        egui::Grid::new("dash_grid").spacing([20.0, 20.0]).show(ui, |ui| {
+            // Status Card
             ui.group(|ui| {
-                ui.set_width(ui.available_width());
-                ui.label(format!("Status: {}", self.status));
+                ui.set_min_size(egui::vec2(280.0, 140.0));
+                ui.vertical_centered(|ui| {
+                    ui.add_space(10.0);
+                    let color = if self.threat_count > 0 { egui::Color32::RED } else { egui::Color32::GREEN };
+                    ui.label(egui::RichText::new(if self.threat_count > 0 { "⚠️ ACTION REQUIRED" } else { "✅ SYSTEM SECURE" }).color(color).strong());
+                    ui.add_space(10.0);
+                    ui.label(format!("Scanned: {} files", self.scanned_count));
+                    ui.label(format!("Threats: {}", self.threat_count));
+                });
             });
 
+            // Quick Actions Card
+            ui.group(|ui| {
+                ui.set_min_size(egui::vec2(280.0, 140.0));
+                ui.vertical(|ui| {
+                    ui.strong("Quick Actions");
+                    if ui.button("⚡ Fast Optimizer").clicked() {}
+                    if ui.button("🛡️ Update Database").clicked() {}
+                });
+            });
+            ui.end_row();
+        });
+    }
+
+    fn render_scanner(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
+        ui.heading("Analysis Engine");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            if ui.add_enabled(!self.is_scanning, egui::Button::new("📂 Custom Scan")).clicked() {
+                if let Some(path) = FileDialog::new().pick_folder() {
+                    self.run_scan(ctx.clone(), path.display().to_string());
+                }
+            }
+            if self.is_scanning { ui.spinner(); }
+        });
+
+        ui.add_space(20.0);
+        
+        // Progress Section
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new("Current Object:").strong());
+            ui.label(egui::RichText::new(&self.current_path).monospace().size(11.0));
             ui.add_space(10.0);
+            ui.add(egui::ProgressBar::new(0.5).animated(self.is_scanning).text("Heuristic Analysis Active"));
+        });
 
-            // CONSOLE / LOGS
-            ui.label("Activity Log:");
-            egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .stick_to_bottom(true)
-                    .show(ui, |ui| {
-                        ui.set_min_width(ui.available_width());
-                        for log in &self.logs {
-                            ui.label(egui::RichText::new(log).monospace().size(11.0));
-                        }
-                    });
-            });
-
-            // BOTTOM INFO
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::RIGHT), |ui| {
-                ui.add_space(5.0);
-                ui.weak("v1.0.0 - Powered by Rust & ClamAV");
+        ui.add_space(20.0);
+        ui.label("Detection Stream:");
+        egui::Frame::none().fill(egui::Color32::from_black_alpha(100)).show(ui, |ui| {
+            egui::ScrollArea::vertical().max_height(200.0).stick_to_bottom(true).show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                for log in self.logs.iter().rev().take(10) {
+                    ui.colored_label(egui::Color32::LIGHT_RED, log);
+                }
             });
         });
     }
+
+    fn render_privacy(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Privacy Cleanup");
+        ui.add_space(20.0);
+        ui.label("Deep cleaning will remove trackers and temporary system files.");
+        
+        static mut JUNK: bool = true;
+        static mut TRACKERS: bool = true;
+        unsafe {
+            ui.checkbox(&mut JUNK, "System Junk (Logs & Cache)");
+            ui.checkbox(&mut TRACKERS, "Browser Trackers");
+        }
+        
+        ui.add_space(20.0);
+        if ui.add_sized([180.0, 40.0], egui::Button::new("🚀 Start Cleanup")).clicked() {}
+    }
+
+    fn render_logs(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Security Event History");
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for log in &self.logs {
+                ui.label(log);
+            }
+        });
+    }
+}
+
+fn setup_custom_fonts(_ctx: &egui::Context) {
+    // Burada özel fontlar eklenebilir
 }

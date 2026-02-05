@@ -4,22 +4,14 @@ version = "1.5.0"
 edition = "2021"
 
 [dependencies]
-# Birbiriyle uyumlu GTK4 ve Libadwaita sürümleri
-# Her ikisi de ffi v0.7 / gtk4-sys v0.7 kullanır
-gtk4 = "0.7"
-libadwaita = "0.5" # 0.4 yerine 0.5 kullanmak çakışmayı çözer
+gtk4 = { version = "0.7", features = ["v4_6"] }
+libadwaita = { version = "0.5", features = ["v1_2"] }
 glib = "0.17"
-
-# Diğer sistem bileşenleri
 walkdir = "2.3"
 notify = "6.0"
 dirs = "5.0"
 rayon = "1.7"
-
-# Güvenlik ve Analiz
 sha2 = "0.10"
 humantime = "2.1"
-
-# Async & Runtime
 futures = "0.3"
 tokio = { version = "1.28", features = ["full"] }

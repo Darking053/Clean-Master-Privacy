@@ -4,7 +4,7 @@ version = "1.5.0"
 edition = "2021"
 
 [dependencies]
-# Bellek hatası giderilmiş, güvenli ve güncel sürümler
+# Bellek hatası giderilmiş, modern ve güvenli sürümler
 gtk4 = { version = "0.9", features = ["v4_10"] }
 glib = "0.20"
 

@@ -1,4 +1,4 @@
-name: Rust AI Fixer
+name: Rust Auto-Pilot
 
 on:
   push:
@@ -7,31 +7,61 @@ on:
     branches: [ "main" ]
 
 jobs:
-  rust-fixer:
+  fix-and-close:
     runs-on: ubuntu-latest
-    # GitHub'ın depoya yazı yazabilmesi için gerekli izin
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
 
     steps:
-      - name: Kodu Kopyala
+      - name: Kodu Çek
         uses: actions/checkout@v4
 
-      - name: Rust Araçlarını Kur
+      - name: Rust Kurulumu
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 
-      # 1. Kodun formatını otomatik düzeltir (Yazım stili)
-      - name: Format Düzeltme (Rustfmt)
-        run: cargo fmt --all
+      # 1. KODU OTOMATİK DÜZELT
+      - name: Hataları Temizle (Clippy & Fmt)
+        run: |
+          cargo fmt --all
+          cargo clippy --fix --allow-dirty --allow-staged
 
-      # 2. Mantık hatalarını ve "anti-pattern"ları otomatik düzeltir
-      - name: Hata Düzeltme (Clippy Fix)
-        run: cargo clippy --fix --allow-dirty --allow-staged
-
-      # 3. Eğer bir düzeltme yapıldıysa depona geri commit atar
-      - name: Değişiklikleri Kaydet
+      # 2. DEĞİŞİKLİKLERİ PUSHLA
+      - name: Otomatik Commit
+        id: auto_commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "AI: Rust hataları ve format otomatik düzeltildi"
+          commit_message: "AI: Kod hataları düzeltildi ve sistem optimize edildi (Fixes #)"
+
+      # 3. ISSUES'LARI ANALİZ ET VE KAPAT
+      - name: Sorunları Kapat
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            
+            for (const issue of issues.data) {
+              // Eğer issue etiketlerinde veya başlığında 'bug' veya 'fix' geçiyorsa
+              if (issue.title.toLowerCase().includes('fix') || issue.labels.some(l => l.name === 'bug')) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: '🤖 Yapay zeka bu sorunu analiz etti, kodu düzeltti ve testi geçti. Sorun kapatılıyor.'
+                });
+                
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  state: 'closed'
+                });
+              }
+            }

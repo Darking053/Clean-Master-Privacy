@@ -40,13 +40,13 @@ jobs:
         with:
           components: clippy, rustfmt
 
-      # 4. Kodu otomatik olarak düzelt ve formatla
+      # 4. Kod formatlama ve düzeltme işlemi
       - name: Autonomous Code Healing
         run: |
           cargo fmt --all
           cargo fix --allow-dirty --allow-staged
 
-      # 5. Commit işlemi yap
+      # 5. Kodun otomatik olarak commit edilmesi
       - name: Commit Autonomous Fixes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
@@ -54,6 +54,7 @@ jobs:
 
       # 6. Derlemeyi yap
       - name: Build Optimized Binary
+        id: cargo_build
         run: |
           export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
           cargo build --release --verbose
@@ -65,7 +66,7 @@ jobs:
           mkdir -p assets
           cp target/release/clean-master-privacy assets/cmp-ultra-linux-x86_64
 
-      # 8. Binary'i Release'e yükle
+      # 8. Binary'yi Release'e yükle
       - name: Auto Release
         if: success() && github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -75,3 +76,19 @@ jobs:
           body: "Automated production build. All systems verified."
           files: assets/cmp-ultra-linux-x86_64
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 9. .deb paket oluşturma ve yükleme
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Build Debian Package
+        run: |
+          cargo build --release
+          cargo deb
+
+      - name: Upload .deb to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/debian/*.deb
+          token: ${{ secrets.GITHUB_TOKEN }}
+

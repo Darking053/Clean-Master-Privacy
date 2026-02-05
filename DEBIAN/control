@@ -1,0 +1,5 @@
+Package: clean-master-privacy
+Version: 1.0.0
+Architecture: amd64
+Maintainer: gamestime102 <x>
+Description: A fast system cleaner written in Rust.

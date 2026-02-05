@@ -16,12 +16,6 @@ const MALICIOUS_PATTERNS: &[&str] = &[
     "GlobalAlloc", "WriteProcessMemory", "shell_exec", "passthru"
 ];
 
-// Shared statistics for the GUI
-struct ShieldStats {
-    scanned_count: u64,
-    threats_neutralized: u64,
-}
-
 fn main() -> glib::ExitCode {
     let application = Application::builder()
         .application_id("com.cmp.security.ultimate")
@@ -29,7 +23,7 @@ fn main() -> glib::ExitCode {
 
     application.connect_activate(build_ui);
     
-    // Start background guard immediately
+    // Background guard monitoring logic
     std::thread::spawn(|| {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async { start_background_guard().await });
@@ -41,7 +35,6 @@ fn main() -> glib::ExitCode {
 // --- Analysis Engine ---
 
 fn is_malicious(path: &Path) -> bool {
-    // Only scan files that could be executable or scripts
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
     let dangerous_exts = ["exe", "dll", "bin", "sh", "bat", "ps1", "js", "php", "py"];
     
@@ -49,15 +42,13 @@ fn is_malicious(path: &Path) -> bool {
 
     let mut file = match File::open(path) {
         Ok(f) => f,
-        Err(_) => return false, // Skip files we can't open
+        Err(_) => return false,
     };
 
-    let mut buffer = [0u8; 16384]; // 16KB analysis window
+    let mut buffer = [0u8; 16384];
     if let Ok(n) = file.read(&mut buffer) {
         if n == 0 { return false; }
         let content = String::from_utf8_lossy(&buffer[..n]).to_lowercase();
-        
-        // Pattern match + Entropy (Simplified for GUI stability)
         return MALICIOUS_PATTERNS.iter().any(|&p| content.contains(&p.to_lowercase()));
     }
     false
@@ -87,12 +78,17 @@ fn build_ui(app: &Application) {
         .build();
 
     let root = GtkBox::new(Orientation::Vertical, 20);
-    root.set_margin_all(30);
+    
+    // Fix: set_margin_all is replaced with explicit margins for cross-version compatibility
+    root.set_margin_top(30);
+    root.set_margin_bottom(30);
+    root.set_margin_start(30);
+    root.set_margin_end(30);
 
     let title_lbl = Label::builder()
         .label("🛡️ CMP Cyber Shield")
-        .css_classes(["title-1"])
         .build();
+    title_lbl.add_css_class("title-1");
 
     let stats_lbl = Label::new(Some("System status: Monitoring in background"));
     let progress = ProgressBar::new();
@@ -150,7 +146,9 @@ async fn run_deep_scan(target: String, label: Option<Label>, pb: Option<Progress
 
 async fn start_background_guard() {
     let (tx, rx) = std::sync::mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default().with_poll_interval(Duration::from_secs(1))).unwrap();
+    let config = Config::default().with_poll_interval(Duration::from_secs(1));
+    let mut watcher = RecommendedWatcher::new(tx, config).unwrap();
+    
     if let Some(home) = dirs::home_dir() {
         let _ = watcher.watch(&home, RecursiveMode::Recursive);
         for res in rx {

@@ -1,11 +1,24 @@
+[package]
+name = "clean-master-privacy"
+version = "1.5.0"
+edition = "2021"
+
 [dependencies]
-gtk4 = "0.7"
-glib = "0.17"
-clap = { version = "4.0", features = ["derive"] }
-walkdir = "2.3"
-rayon = "1.7"
-notify = "6.0"
-dirs = "5.0"
-futures = "0.3"
-sha2 = "0.10"
-humantime = "2.1"
+# GUI
+gtk4 = "0.7.3"
+glib = "0.17.10"
+libadwaita = "0.4.0"
+
+# Filesystem & Speed
+walkdir = "2.3.3"
+notify = "6.0.0"
+dirs = "5.0.1"
+rayon = "1.7.0"
+
+# Security
+sha2 = "0.10.7"
+humantime = "2.1.0"
+
+# Async Core
+futures = "0.3.28"
+tokio = { version = "1.28", features = ["full"] }

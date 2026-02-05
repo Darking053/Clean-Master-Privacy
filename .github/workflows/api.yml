@@ -1,0 +1,37 @@
+name: Rust AI Fixer
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  rust-fixer:
+    runs-on: ubuntu-latest
+    # GitHub'ın depoya yazı yazabilmesi için gerekli izin
+    permissions:
+      contents: write
+
+    steps:
+      - name: Kodu Kopyala
+        uses: actions/checkout@v4
+
+      - name: Rust Araçlarını Kur
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # 1. Kodun formatını otomatik düzeltir (Yazım stili)
+      - name: Format Düzeltme (Rustfmt)
+        run: cargo fmt --all
+
+      # 2. Mantık hatalarını ve "anti-pattern"ları otomatik düzeltir
+      - name: Hata Düzeltme (Clippy Fix)
+        run: cargo clippy --fix --allow-dirty --allow-staged
+
+      # 3. Eğer bir düzeltme yapıldıysa depona geri commit atar
+      - name: Değişiklikleri Kaydet
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "AI: Rust hataları ve format otomatik düzeltildi"

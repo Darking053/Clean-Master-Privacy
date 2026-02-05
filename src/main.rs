@@ -33,7 +33,7 @@ fn build_ui(app: &Application) {
 
     let root = GtkBox::new(Orientation::Vertical, 20);
     
-    // Güvenli margin ayarları
+    // Kenar boşlukları (Yeni sürümlerde en güvenli yol)
     root.set_margin_top(30);
     root.set_margin_bottom(30);
     root.set_margin_start(30);
@@ -67,7 +67,6 @@ fn build_ui(app: &Application) {
     window.present();
 }
 
-// --- Arka Plan Fonksiyonları (Öncekiyle aynı, hata payı düşük kısımlar) ---
 async fn run_deep_scan(target: String, label: Option<Label>, pb: Option<ProgressBar>) {
     let files: Vec<PathBuf> = walkdir::WalkDir::new(&target)
         .into_iter()
@@ -79,12 +78,12 @@ async fn run_deep_scan(target: String, label: Option<Label>, pb: Option<Progress
     let total = files.len() as f64;
     let threats = Arc::new(Mutex::new(0));
 
-    rayon::iter::ParallelIterator::enumerate(files.par_iter()).for_each(|(i, path)| {
+    files.par_iter().enumerate().for_each(|(i, path)| {
         if let Some(ref p_bar) = pb {
             let p = p_bar.clone();
             glib::idle_add_local_once(move || p.set_fraction(i as f64 / total));
         }
-        // Basitleştirilmiş tarama mantığı
+        // Uzantı bazlı basit kontrol
         if path.extension().and_then(|s| s.to_str()) == Some("exe") {
             let mut count = threats.lock().unwrap();
             *count += 1;
@@ -98,11 +97,12 @@ async fn run_deep_scan(target: String, label: Option<Label>, pb: Option<Progress
 
 async fn start_background_guard() {
     let (tx, rx) = std::sync::mpsc::channel();
-    if let Ok(mut watcher) = RecommendedWatcher::new(tx, Config::default().with_poll_interval(Duration::from_secs(1))) {
+    let config = Config::default().with_poll_interval(Duration::from_secs(1));
+    if let Ok(mut watcher) = RecommendedWatcher::new(tx, config) {
         if let Some(home) = dirs::home_dir() {
             let _ = watcher.watch(&home, RecursiveMode::Recursive);
             for res in rx {
-                if let Ok(_event) = res { /* Olay işleme */ }
+                if let Ok(_event) = res { /* Olaylar burada işlenebilir */ }
             }
         }
     }

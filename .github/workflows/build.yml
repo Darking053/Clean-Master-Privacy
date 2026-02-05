@@ -8,13 +8,15 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4 # v3 yerine v4
 
       - name: Install Rust
         run: rustup update stable
 
       - name: Install GTK Dev Tools
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwayland-dev libxkbcommon-dev
 
       - name: Build Binary
         run: cargo build --release
@@ -23,19 +25,24 @@ jobs:
         run: |
           mkdir -p package/usr/bin
           mkdir -p package/DEBIAN
+          # Binary dosyasını kopyala
           cp target/release/clean-master-privacy package/usr/bin/
-          echo "Package: clean-master-privacy
+          # Control dosyasını oluştur
+          cat <<EOF > package/DEBIAN/control
+          Package: clean-master-privacy
           Version: 1.1.0
           Section: utils
           Priority: optional
           Architecture: amd64
           Depends: clamav
           Maintainer: Developer
-          Description: ClamTK alternative written in pure Rust for privacy and cleanup." > package/DEBIAN/control
+          Description: ClamTK alternative written in pure Rust for privacy and cleanup.
+          EOF
+          # .deb paketini build et
           dpkg-deb --build package clean-master-privacy.deb
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # Hatalı olan v3'ü v4 ile değiştirdik
         with:
-          name: CleanMasterDEB
+          name: CleanMaster-Binary-DEB
           path: clean-master-privacy.deb

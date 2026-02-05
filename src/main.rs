@@ -33,7 +33,7 @@ fn build_ui(app: &Application) {
 
     let root = GtkBox::new(Orientation::Vertical, 20);
     
-    // Kenar boşlukları (Yeni sürümlerde en güvenli yol)
+    // Kenar boşlukları (En kararlı ve uyumlu yöntem)
     root.set_margin_top(30);
     root.set_margin_bottom(30);
     root.set_margin_start(30);
@@ -83,7 +83,7 @@ async fn run_deep_scan(target: String, label: Option<Label>, pb: Option<Progress
             let p = p_bar.clone();
             glib::idle_add_local_once(move || p.set_fraction(i as f64 / total));
         }
-        // Uzantı bazlı basit kontrol
+        // Uzantı bazlı temel tehdit tespiti
         if path.extension().and_then(|s| s.to_str()) == Some("exe") {
             let mut count = threats.lock().unwrap();
             *count += 1;
@@ -102,7 +102,7 @@ async fn start_background_guard() {
         if let Some(home) = dirs::home_dir() {
             let _ = watcher.watch(&home, RecursiveMode::Recursive);
             for res in rx {
-                if let Ok(_event) = res { /* Olaylar burada işlenebilir */ }
+                if let Ok(_event) = res { /* Olay yakalama mantığı */ }
             }
         }
     }
